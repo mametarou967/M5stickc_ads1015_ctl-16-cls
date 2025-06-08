@@ -17,6 +17,10 @@ ADS1015 ADS(0x48);
 
 #define SAMPLING_COUNT 500
 float voltageBuffer[SAMPLING_COUNT] = { 0.0 };
+float currentBuffer[SAMPLING_COUNT] = { 0.0 };
+float Goukeichi = 0.0;
+float minusBunMizumashi = 0.0;
+float jikkouchi = 0.0;
 unsigned long measureStartTime = 0;
 unsigned long measureEndTime = 0;
 
@@ -68,8 +72,12 @@ loop()函数是一个死循环，其中的程序会不断的重复运行 */
 void loop() {
     M5.update();  // Read the press state of the key.  读取按键 A, B, C 的状态
     if (M5.BtnA.wasReleased()) {  // Aボタン押下 -> 計測開始
-      M5.Lcd.println("start measure");
-      Serial.println("start measure");
+      M5.Lcd.fillScreen(BLACK);
+      M5.Lcd.setCursor(0, 0);
+      M5.Lcd.setTextSize(1);
+      M5.Lcd.setTextColor(GREEN);
+      M5.Lcd.print("measure:start");
+      Serial.print("measure:start");
       measureStartTime = micros(); // 計測開始時間
       for(int loop_count = 0;loop_count < SAMPLING_COUNT;loop_count++) // サンプリング数分だけ連続ADS1105に対して連続読み取り
       {
@@ -79,29 +87,80 @@ void loop() {
         voltageBuffer[loop_count] = val_0 * f; //pin0からI2C経由で値を読み取り、電圧値に変換したものを配列格納
       }
       measureEndTime = micros(); // 計測終了時間
-      M5.Lcd.println("end measure");
-      Serial.println("end measure");
+      M5.Lcd.println("end");
+      Serial.println("end");
+
+      M5.Lcd.print("calc:start");
+      Serial.print("calc:start");
+      calcJikkouchi();
+      M5.Lcd.println("end");
+      Serial.println("end");
+      M5.Lcd.print("print:start");
+      Serial.print("print:start");
+      printValue();
+      M5.Lcd.println("end");
+      Serial.println("end");
+      Serial.println("");
+      M5.Lcd.setTextSize(3);
+      M5.Lcd.setTextColor(RED);
+      M5.Lcd.print(jikkouchi,6);
+      M5.Lcd.println("A");
     } else if (M5.BtnB.wasReleased()) { // Bボタン押下 -> 測定結果をシリアル出力
-      M5.Lcd.println("start print");
-      Serial.println("start print");
-      unsigned long measureAllTime = measureEndTime - measureStartTime;
-      Serial.print("measureAllTime: ");
-      Serial.print(measureAllTime);
-      Serial.println(" us");
-      Serial.print("measureSampleTime: ");
-      Serial.print(measureAllTime / SAMPLING_COUNT);
-      Serial.println(" us");
-      for(int loop_count = 0;loop_count < SAMPLING_COUNT;loop_count++)
-      {
-        Serial.println(voltageBuffer[loop_count],6);
-      }
-      M5.Lcd.println("end print");
-      Serial.println("end print");
-    } else if (M5.BtnB.wasReleasefor(
-                   700)) {  // The button B is pressed for 700ms. 按键 B 按下
-                            // 700ms,屏幕清空
-        M5.Lcd.fillScreen(
-            BLACK);  // Set BLACK to the background color.  将黑色设置为底色
-        M5.Lcd.setCursor(0, 0);
+      printValue();
+    } 
+}
+
+void calcJikkouchi()
+{
+  Goukeichi = 0;
+  minusBunMizumashi = 0;
+  jikkouchi = 0;
+
+
+  for(int loop_count = 0;loop_count < SAMPLING_COUNT;loop_count++) // サンプリング数分だけ連続ADS1105に対して連続読み取り
+  {
+    if(voltageBuffer[loop_count] > 0.0){
+      currentBuffer[loop_count] = ConvertVoltageToCurrentOn100ohm(voltageBuffer[loop_count]);
     }
+    else
+    {
+      currentBuffer[loop_count] = 0.0;
+    }
+
+    Goukeichi += currentBuffer[loop_count];
+  }
+
+  minusBunMizumashi = Goukeichi * 2.0;
+
+  // 実効値を求める
+  jikkouchi = sqrt(minusBunMizumashi / SAMPLING_COUNT);
+}
+
+float ConvertVoltageToCurrentOn100ohm(float voltage)
+{
+  // V変換 + 係数
+  return 0.0275 * pow(fabs(voltage * 1000), 0.996);
+}
+
+void printValue()
+{
+  unsigned long measureAllTime = measureEndTime - measureStartTime;
+  Serial.print("measureAllTime: ");
+  Serial.print(measureAllTime);
+  Serial.println(" us");
+  Serial.print("measureSampleTime: ");
+  Serial.print(measureAllTime / SAMPLING_COUNT);
+  Serial.println(" us");
+  for(int loop_count = 0;loop_count < SAMPLING_COUNT;loop_count++)
+  {
+    Serial.print(voltageBuffer[loop_count],6);
+    Serial.print(" ");
+    Serial.println(currentBuffer[loop_count],6);
+  }
+  Serial.print("Goukeichi:");
+  Serial.println(Goukeichi,6);
+  Serial.print("minusBunMizumashi:");
+  Serial.println(minusBunMizumashi,6);
+  Serial.print("jikkouchi:");
+  Serial.println(jikkouchi,6);
 }
