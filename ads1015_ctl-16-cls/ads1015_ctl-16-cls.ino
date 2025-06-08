@@ -15,6 +15,11 @@
 
 ADS1015 ADS(0x48);
 
+#define SAMPLING_COUNT 500
+float voltageBuffer[SAMPLING_COUNT] = { 0.0 };
+unsigned long measureStartTime = 0;
+unsigned long measureEndTime = 0;
+
 /* After M5StickC is started or reset
   the program in the setUp () function will be run, and this part will only be
   run once. 在 M5StickC
@@ -22,6 +27,7 @@ ADS1015 ADS(0x48);
 void setup() {
     M5.begin();  // Initialize the M5StickC object.  初始化 M5StickC 对象
     Wire.begin();  // Init wire and join the I2C network.
+    Wire.setClock(400000);
     M5.Lcd.setTextColor(
         YELLOW);  // Set the font color to yellow.  设置字体颜色为黄色
     M5.Lcd.setRotation(3);
@@ -61,17 +67,36 @@ The loop() function is an infinite loop in which the program runs repeatedly
 loop()函数是一个死循环，其中的程序会不断的重复运行 */
 void loop() {
     M5.update();  // Read the press state of the key.  读取按键 A, B, C 的状态
-    if (M5.BtnA
-            .wasReleased()) {  // If the button A is pressed.  如果按键 A 被按下
-        M5.Lcd.print('A');
+    if (M5.BtnA.wasReleased()) {  // Aボタン押下 -> 計測開始
+      M5.Lcd.println("start measure");
+      Serial.println("start measure");
+      measureStartTime = micros(); // 計測開始時間
+      for(int loop_count = 0;loop_count < SAMPLING_COUNT;loop_count++) // サンプリング数分だけ連続ADS1105に対して連続読み取り
+      {
         ADS.setGain(0);
         int val_0 = ADS.readADC(); //pin0
-        M5.Lcd.printf("Analog0:%d\n");
         float f= ADS.toVoltage(1);
-        M5.Lcd.println(val_0 * f , 3);
-    } else if (M5.BtnB.wasReleased()) {  // If the button B is pressed. 如果按键
-                                         // B 被按下，
-        M5.Lcd.print('B');
+        voltageBuffer[loop_count] = val_0 * f; //pin0からI2C経由で値を読み取り、電圧値に変換したものを配列格納
+      }
+      measureEndTime = micros(); // 計測終了時間
+      M5.Lcd.println("end measure");
+      Serial.println("end measure");
+    } else if (M5.BtnB.wasReleased()) { // Bボタン押下 -> 測定結果をシリアル出力
+      M5.Lcd.println("start print");
+      Serial.println("start print");
+      unsigned long measureAllTime = measureEndTime - measureStartTime;
+      Serial.print("measureAllTime: ");
+      Serial.print(measureAllTime);
+      Serial.println(" us");
+      Serial.print("measureSampleTime: ");
+      Serial.print(measureAllTime / SAMPLING_COUNT);
+      Serial.println(" us");
+      for(int loop_count = 0;loop_count < SAMPLING_COUNT;loop_count++)
+      {
+        Serial.println(voltageBuffer[loop_count],6);
+      }
+      M5.Lcd.println("end print");
+      Serial.println("end print");
     } else if (M5.BtnB.wasReleasefor(
                    700)) {  // The button B is pressed for 700ms. 按键 B 按下
                             // 700ms,屏幕清空
