@@ -127,7 +127,7 @@ void calcJikkouchi()
       currentBuffer[loop_count] = 0.0;
     }
 
-    Goukeichi += currentBuffer[loop_count];
+    Goukeichi += pow(currentBuffer[loop_count],2);
   }
 
   minusBunMizumashi = Goukeichi * 2.0;
