@@ -24,12 +24,15 @@ float jikkouchi = 0.0;
 unsigned long measureStartTime = 0;
 unsigned long measureEndTime = 0;
 
+unsigned long loopStartTime = 0;
+
 /* After M5StickC is started or reset
   the program in the setUp () function will be run, and this part will only be
   run once. 在 M5StickC
   启动或者复位后，即会开始执行setup()函数中的程序，该部分只会执行一次。 */
 void setup() {
     M5.begin();  // Initialize the M5StickC object.  初始化 M5StickC 对象
+    Serial1.begin(9600,SERIAL_8N1,0,26);
     Wire.begin();  // Init wire and join the I2C network.
     Wire.setClock(400000);
     M5.Lcd.setTextColor(
@@ -63,6 +66,9 @@ void setup() {
       M5.Lcd.setTextColor(GREEN);
       M5.Lcd.println("ADS1015 is FOUND");
     }
+    
+    delay(3000); // 少しだけ画面を表示しておく
+    loopStartTime = micros();
 }
 
 /* After the program in setup() runs, it runs the program in loop()
@@ -70,44 +76,63 @@ The loop() function is an infinite loop in which the program runs repeatedly
 在setup()函数中的程序执行完后，会接着执行loop()函数中的程序
 loop()函数是一个死循环，其中的程序会不断的重复运行 */
 void loop() {
-    M5.update();  // Read the press state of the key.  读取按键 A, B, C 的状态
-    if (M5.BtnA.wasReleased()) {  // Aボタン押下 -> 計測開始
-      M5.Lcd.fillScreen(BLACK);
-      M5.Lcd.setCursor(0, 0);
-      M5.Lcd.setTextSize(1);
-      M5.Lcd.setTextColor(GREEN);
-      M5.Lcd.print("measure:start");
-      Serial.print("measure:start");
-      measureStartTime = micros(); // 計測開始時間
-      for(int loop_count = 0;loop_count < SAMPLING_COUNT;loop_count++) // サンプリング数分だけ連続ADS1105に対して連続読み取り
-      {
-        ADS.setGain(0);
-        int val_0 = ADS.readADC(); //pin0
-        float f= ADS.toVoltage(1);
-        voltageBuffer[loop_count] = val_0 * f; //pin0からI2C経由で値を読み取り、電圧値に変換したものを配列格納
-      }
-      measureEndTime = micros(); // 計測終了時間
-      M5.Lcd.println("end");
-      Serial.println("end");
+  // 1病経過したら、計測して送信する
+  if(labs(micros() - loopStartTime) > 60000000) // 1分に一回
+  {
+    loopStartTime = micros();
+    measureCurrent(); // 電流の測定
+    sendCurrent();
+  }
+}
 
-      M5.Lcd.print("calc:start");
-      Serial.print("calc:start");
-      calcJikkouchi();
-      M5.Lcd.println("end");
-      Serial.println("end");
-      M5.Lcd.print("print:start");
-      Serial.print("print:start");
-      printValue();
-      M5.Lcd.println("end");
-      Serial.println("end");
-      Serial.println("");
-      M5.Lcd.setTextSize(3);
-      M5.Lcd.setTextColor(RED);
-      M5.Lcd.print(jikkouchi,6);
-      M5.Lcd.println("A");
-    } else if (M5.BtnB.wasReleased()) { // Bボタン押下 -> 測定結果をシリアル出力
-      printValue();
-    } 
+void sendCurrent()
+{
+  char currentChar[16] = {0};
+  dtostrf(jikkouchi,8,6,currentChar);
+
+  Serial1.write(0x00); // アドレス上位
+  Serial1.write(0x00); // アドレス下位
+  Serial1.write(0x01); // チャンネル
+  Serial1.write('C'); // コマンド
+  Serial1.write(currentChar);
+  Serial1.write("\r\n");
+
+}
+
+void measureCurrent()
+{
+  M5.Lcd.fillScreen(BLACK);
+  M5.Lcd.setCursor(0, 0);
+  M5.Lcd.setTextSize(1);
+  M5.Lcd.setTextColor(GREEN);
+  M5.Lcd.print("measure:start");
+  Serial.print("measure:start");
+  measureStartTime = micros(); // 計測開始時間
+  for(int loop_count = 0;loop_count < SAMPLING_COUNT;loop_count++) // サンプリング数分だけ連続ADS1105に対して連続読み取り
+  {
+    ADS.setGain(0);
+    int val_0 = ADS.readADC(); //pin0
+    float f= ADS.toVoltage(1);
+    voltageBuffer[loop_count] = val_0 * f; //pin0からI2C経由で値を読み取り、電圧値に変換したものを配列格納
+  }
+  measureEndTime = micros(); // 計測終了時間
+  M5.Lcd.println("end");
+  Serial.println("end");
+
+  M5.Lcd.print("calc:start");
+  Serial.print("calc:start");
+  calcJikkouchi();
+  M5.Lcd.println("end");
+  Serial.println("end");
+  M5.Lcd.print("print:start");
+  Serial.print("print:start");
+  printValue();
+  M5.Lcd.println("end");
+  Serial.println("end");
+  Serial.println("");
+  M5.Lcd.setTextSize(3);
+  M5.Lcd.setTextColor(RED);
+  M5.Lcd.print(jikkouchi,6);
 }
 
 void calcJikkouchi()
